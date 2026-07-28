@@ -1,0 +1,158 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>SEO Lens — popup preview</title>
+  <style>
+    body { margin: 0; font: 13px system-ui, sans-serif; background: #22252c; color: #aab; }
+    .stage { display: flex; gap: 20px; padding: 20px; align-items: flex-start; flex-wrap: wrap; }
+    .frame {
+      width: 420px; border: 1px solid #3a3f4b; border-radius: 12px; overflow: hidden;
+      box-shadow: 0 12px 40px rgba(0,0,0,.45); background: #0f1115;
+    }
+    .hint { max-width: 320px; line-height: 1.6; }
+    .hint code { background: #2a2f3a; padding: 1px 5px; border-radius: 4px; }
+    h1 { font-size: 15px; margin: 0 0 8px; color: #e6e9ef; }
+  </style>
+</head>
+<body>
+  <div class="stage">
+    <div class="frame"><div id="popup-root"></div></div>
+    <div class="hint">
+      <h1>Popup preview</h1>
+      <p>
+        This harness stubs the <code>chrome.*</code> APIs and runs the real
+        <code>popup.js</code> against synthetic fixture pages, so the UI can be
+        checked without reloading the extension.
+      </p>
+      <p>The markup is pulled from <code>popup.html</code> at load time — there is no second copy to keep in sync.</p>
+      <p>Serve the repo root over HTTP and open <code>/tools/preview.html</code>.</p>
+    </div>
+  </div>
+
+  <script type="module">
+    import { extractFromHtml } from '../src/html-extract.js';
+
+    // ---------------------------------------------------------- fixtures ----
+    const competitorHtml = (brand, extra) => `<html lang="en"><head>
+<title>${brand} — Project Management Software for Remote Teams</title>
+<meta name="description" content="${brand} is project management software with task tracking, gantt charts and time tracking for remote teams.">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<link rel="canonical" href="https://${brand.toLowerCase()}.com/">
+<meta property="og:title" content="${brand}"><meta property="og:description" content="Project management software."><meta property="og:image" content="/og.png">
+<script type="application/ld+json">{"@type":"SoftwareApplication","name":"${brand}"}<\/script>
+</head><body>
+<h1>Project Management Software for Remote Teams</h1>
+<p>${brand} gives teams task tracking, gantt charts, sprint planning and time tracking in one project management workspace. Remote teams plan sprints, assign tasks and track project progress with project management software built for distributed work.</p>
+<h2>Task Tracking and Sprint Planning</h2>
+<p>Task tracking keeps every task visible. Sprint planning lets agile teams estimate story points and run sprint retrospectives. Team collaboration happens inside the task.</p>
+<h2>Gantt Charts and Timelines</h2>
+<p>Gantt charts show project timelines, dependencies and milestones. Resource management shows who is overloaded. Gantt charts update when you reschedule a task.</p>
+<h2>Time Tracking and Reporting</h2>
+<p>Time tracking turns logged hours into project reports and client invoices. Reporting dashboards cover team workload and sprint velocity. Time tracking runs in the background.</p>
+${extra}
+<h2>Pricing</h2><p>Free plan for small teams. Pricing starts at nine dollars per user per month.</p>
+<img src="/hero.png" alt="Project management dashboard" width="800" height="600" loading="lazy">
+<a href="/features">Features</a><a href="/pricing">Pricing</a><a href="/templates">Project templates</a>
+</body></html>`;
+
+    const targetHtml = `<html><head><title>Home</title></head><body>
+<h1>Welcome</h1><h1>Our Product</h1>
+<p>We make a task tracking app for teams. Our task tracking app helps teams work together. Try our task tracking tool today.</p>
+<img src="/a.png"><img src="/b.png">
+<a href="https://acme.com/">Acme</a><a href="https://linear.app/">Linear</a><a href="/about">About</a>
+</body></html>`;
+
+    const targetPage = extractFromHtml(targetHtml, 'https://mysite.com/');
+    const competitorPages = [
+      extractFromHtml(competitorHtml('Acme', '<h2>Team Collaboration</h2><p>Team collaboration with shared docs and chat keeps remote teams aligned. Team collaboration is built in.</p>'), 'https://acme.com/'),
+      extractFromHtml(competitorHtml('Bolt', '<h2>Workflow Automation</h2><p>Workflow automation moves tasks between stages and triggers notifications. Workflow automation needs no code.</p>'), 'https://bolt.com/'),
+      extractFromHtml(competitorHtml('Cirrus', '<h2>Agile Reporting</h2><p>Agile reporting covers sprint velocity, burndown charts and cycle time. Agile reporting is exportable.</p>'), 'https://cirrus.com/'),
+    ];
+
+    // ------------------------------------------------------- chrome stubs ---
+    const store = { competitors: competitorPages.map((p) => p.url) };
+
+    window.chrome = {
+      tabs: {
+        query: async () => [{ id: 1, url: targetPage.url, title: targetPage.title }],
+      },
+      storage: {
+        local: {
+          async get(keys) {
+            if (keys === null || keys === undefined) return { ...store };
+            const list = Array.isArray(keys) ? keys : [keys];
+            const out = {};
+            for (const k of list) if (k in store) out[k] = store[k];
+            return out;
+          },
+          async set(obj) { Object.assign(store, obj); },
+          async remove(keys) {
+            for (const k of [].concat(keys)) delete store[k];
+          },
+        },
+      },
+      scripting: {
+        executeScript: async () => [{ result: targetPage }],
+      },
+      runtime: {
+        sendMessage: async (msg) => {
+          if (msg.type !== 'FETCH_COMPETITORS') return { ok: true };
+          await new Promise((r) => setTimeout(r, 250)); // exercise the loading state
+          return {
+            ok: true,
+            results: msg.urls.map((url) => {
+              const page = competitorPages.find((p) => p.url === url);
+              return page
+                ? { url, ok: true, page, cached: false }
+                : { url, ok: false, error: 'HTTP 403 Forbidden', code: 'HTTP' };
+            }),
+          };
+        },
+      },
+      permissions: {
+        contains: async () => true,
+        request: async () => true,
+      },
+    };
+
+    // ------------------------------------------- mount the real popup DOM ---
+    const html = await (await fetch('../popup.html')).text();
+    const doc = new DOMParser().parseFromString(html, 'text/html');
+    doc.querySelectorAll('script').forEach((s) => s.remove());
+    document.getElementById('popup-root').innerHTML = doc.body.innerHTML;
+
+    // Load the real stylesheet, then undo the rules popup.css applies to
+    // <body> (it assumes it *is* the popup) and re-apply them to the frame.
+    await new Promise((resolve, reject) => {
+      const link = document.createElement('link');
+      link.rel = 'stylesheet';
+      link.href = '../popup.css';
+      link.onload = resolve;
+      link.onerror = reject;
+      document.head.appendChild(link);
+    });
+
+    const override = document.createElement('style');
+    override.textContent = `
+      html, body {
+        width: auto !important; max-height: none !important;
+        display: block !important; overflow: auto !important;
+        background: #22252c !important; color: #aab !important;
+      }
+      #popup-root {
+        width: 420px; height: 600px;
+        display: flex; flex-direction: column; overflow: hidden;
+        background: var(--bg); color: var(--text);
+      }
+      .hint h1 { color: #e6e9ef; }
+    `;
+    document.head.appendChild(override);
+
+    await import('../popup.js');
+
+    // Auto-run a scan so the preview lands on populated UI.
+    document.getElementById('scan-btn').click();
+  </script>
+</body>
+</html>

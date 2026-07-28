@@ -1,0 +1,135 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>SEO Lens</title>
+  <link rel="stylesheet" href="popup.css">
+</head>
+<body>
+  <header class="topbar">
+    <div class="brand">
+      <svg class="mark" viewBox="0 0 24 24" aria-hidden="true">
+        <circle cx="10.5" cy="10.5" r="6.5" fill="none" stroke="currentColor" stroke-width="2"/>
+        <path d="M15.5 15.5 L21 21" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"/>
+        <path d="M8 12.5v-2M10.5 12.5V8M13 12.5v-3" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/>
+      </svg>
+      <div class="brand-text">
+        <strong>SEO Lens</strong>
+        <span id="page-host" class="muted">—</span>
+      </div>
+    </div>
+    <button id="scan-btn" class="primary" type="button">Scan page</button>
+  </header>
+
+  <div id="status" class="status" hidden></div>
+
+  <main id="empty" class="empty">
+    <div class="empty-art" aria-hidden="true">◎</div>
+    <h2>One click, full page audit</h2>
+    <p>Scan the current tab for on-page SEO issues, then compare its keyword profile against competitors in the same category.</p>
+    <ul class="empty-list">
+      <li>28 on-page checks with concrete fixes</li>
+      <li>TF-IDF keyword extraction across you + competitors</li>
+      <li>k-means clustering to surface content gaps</li>
+    </ul>
+  </main>
+
+  <main id="results" hidden>
+    <section class="scorecard">
+      <div class="ring-wrap">
+        <svg class="ring" viewBox="0 0 120 120" aria-hidden="true">
+          <circle class="ring-track" cx="60" cy="60" r="52"/>
+          <circle id="ring-value" class="ring-value" cx="60" cy="60" r="52"/>
+        </svg>
+        <div class="ring-label">
+          <span id="score-value">–</span>
+          <small id="score-grade"></small>
+        </div>
+      </div>
+      <div class="score-meta">
+        <h2 id="score-headline">SEO health</h2>
+        <p id="score-sub" class="muted"></p>
+        <div class="pill-row">
+          <span class="pill critical"><b id="count-critical">0</b> critical</span>
+          <span class="pill warning"><b id="count-warning">0</b> warnings</span>
+          <span class="pill notice"><b id="count-notice">0</b> notices</span>
+          <span class="pill ok"><b id="count-passed">0</b> passed</span>
+        </div>
+      </div>
+    </section>
+
+    <nav class="tabs" role="tablist">
+      <button class="tab active" data-tab="issues" role="tab" type="button">Issues</button>
+      <button class="tab" data-tab="keywords" role="tab" type="button">Keywords</button>
+      <button class="tab" data-tab="clusters" role="tab" type="button">Clusters</button>
+      <button class="tab" data-tab="competitors" role="tab" type="button">Competitors</button>
+    </nav>
+
+    <section id="panel-issues" class="panel" role="tabpanel">
+      <div id="recommendations"></div>
+      <div id="findings"></div>
+      <details id="passed-wrap" class="passed">
+        <summary>Passed checks (<span id="passed-count">0</span>)</summary>
+        <ul id="passed-list"></ul>
+      </details>
+    </section>
+
+    <section id="panel-keywords" class="panel" hidden role="tabpanel">
+      <div class="filter-row">
+        <input id="kw-search" type="search" placeholder="Filter keywords…" autocomplete="off">
+        <select id="kw-filter">
+          <option value="all">All statuses</option>
+          <option value="gap">Gaps only</option>
+          <option value="underused">Underused</option>
+          <option value="defend">Your strengths</option>
+          <option value="unique">Unique to you</option>
+        </select>
+      </div>
+      <div id="kw-note" class="note" hidden></div>
+      <table class="kw-table">
+        <thead>
+          <tr>
+            <th class="sortable" data-sort="score">Keyword</th>
+            <th class="sortable num" data-sort="coverage" title="Share of competitor pages using this term">Cat.</th>
+            <th class="sortable num" data-sort="targetStrength" title="How strongly this page uses the term">You</th>
+            <th class="sortable num" data-sort="score" title="Recommendation score">Score</th>
+          </tr>
+        </thead>
+        <tbody id="kw-body"></tbody>
+      </table>
+      <button id="kw-more" class="ghost full" type="button" hidden>Show more</button>
+    </section>
+
+    <section id="panel-clusters" class="panel" hidden role="tabpanel">
+      <div id="cluster-meta" class="note"></div>
+      <div id="opportunity-map"></div>
+      <div id="clusters"></div>
+    </section>
+
+    <section id="panel-competitors" class="panel" hidden role="tabpanel">
+      <p class="muted small">
+        Add 3–5 pages in the same category. They are fetched directly by the extension and parsed locally —
+        nothing is sent to a server.
+      </p>
+      <form id="comp-form" class="comp-form">
+        <input id="comp-input" type="text" placeholder="https://competitor.com/page" autocomplete="off" spellcheck="false">
+        <button class="primary" type="submit">Add</button>
+      </form>
+      <div id="comp-suggestions"></div>
+      <ul id="comp-list" class="comp-list"></ul>
+      <div id="benchmarks"></div>
+      <div class="comp-actions">
+        <button id="comp-rescan" class="primary full" type="button">Re-run analysis</button>
+        <button id="comp-refresh" class="ghost full" type="button">Refetch (ignore cache)</button>
+      </div>
+    </section>
+  </main>
+
+  <footer class="footer">
+    <span id="footer-note" class="muted small">Everything runs locally in your browser.</span>
+    <button id="export-btn" class="link" type="button" hidden>Export JSON</button>
+  </footer>
+
+  <script type="module" src="popup.js"></script>
+</body>
+</html>

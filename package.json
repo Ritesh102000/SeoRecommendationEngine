@@ -1,0 +1,17 @@
+{
+  "name": "seo-lens",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Chrome extension: one-click on-page SEO audit with TF-IDF keyword scoring and k-means clustering against competitor pages.",
+  "scripts": {
+    "icons": "node tools/make-icons.mjs",
+    "test": "node tools/test.mjs",
+    "lint": "node tools/check-syntax.mjs",
+    "build": "node tools/package.mjs",
+    "check": "npm run lint && npm run test"
+  },
+  "engines": {
+    "node": ">=18"
+  }
+}

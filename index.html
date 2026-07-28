@@ -1,0 +1,51 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>SEO Lens — Free Website SEO Audit</title>
+  <meta name="description" content="Enter any webpage URL and get an instant SEO score with clear, actionable fixes.">
+  <link rel="stylesheet" href="/styles.css">
+</head>
+<body>
+  <header class="nav">
+    <a class="brand" href="/" aria-label="SEO Lens home"><span>⌕</span> SEO Lens</a>
+    <span class="badge">Free SEO audit</span>
+  </header>
+
+  <main>
+    <section class="hero">
+      <p class="eyebrow">28 on-page checks · instant results</p>
+      <h1>Find what’s holding your website back.</h1>
+      <p class="intro">Enter a webpage and get a clear SEO score, prioritized issues, and precise fixes in seconds.</p>
+      <form id="audit-form" class="search">
+        <label class="sr-only" for="url">Webpage URL</label>
+        <input id="url" name="url" type="text" inputmode="url" placeholder="https://yourwebsite.com" required autocomplete="url">
+        <button id="submit" type="submit">Audit my page <span>→</span></button>
+      </form>
+      <p id="error" class="error" role="alert" hidden></p>
+      <div class="trust">
+        <span>✓ No account needed</span><span>✓ Actionable fixes</span><span>✓ Results in seconds</span>
+      </div>
+    </section>
+
+    <section id="results" class="results" hidden aria-live="polite">
+      <div class="result-head">
+        <div class="score" id="score"><strong>—</strong><span>SEO score</span></div>
+        <div>
+          <p class="eyebrow">Audit complete</p>
+          <h2 id="result-title">Results</h2>
+          <a id="result-url" href="#" target="_blank" rel="noopener"></a>
+        </div>
+      </div>
+      <div id="stats" class="stats"></div>
+      <div class="section-title"><h2>What to fix first</h2><span id="issue-count"></span></div>
+      <div id="findings" class="findings"></div>
+      <details class="passed"><summary id="passed-summary">Passed checks</summary><div id="passed-list"></div></details>
+    </section>
+  </main>
+
+  <footer>SEO Lens · On-page SEO checks you can actually act on.</footer>
+  <script type="module" src="/app.js"></script>
+</body>
+</html>
