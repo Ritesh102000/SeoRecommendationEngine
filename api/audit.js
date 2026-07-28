@@ -55,8 +55,8 @@ function responseText(response) {
     .join('\n');
 }
 
-async function getAiInsights(page, baselineKeywords, manualCompetitors, autoFind) {
-  if (!process.env.OPENAI_API_KEY) {
+async function getAiInsights(page, baselineKeywords, manualCompetitors, autoFind, apiKey = process.env.OPENAI_API_KEY) {
+  if (!apiKey) {
     throw new Error('OpenAI is not configured for this deployment.');
   }
 
@@ -86,7 +86,7 @@ Choose 10 high-value keywords grounded in the actual page. ${autoFind
     method: 'POST',
     signal: AbortSignal.timeout(35_000),
     headers: {
-      authorization: `Bearer ${process.env.OPENAI_API_KEY}`,
+      authorization: `Bearer ${apiKey}`,
       'content-type': 'application/json',
     },
     body: JSON.stringify({
@@ -100,14 +100,14 @@ Choose 10 high-value keywords grounded in the actual page. ${autoFind
 
   if (!request.ok) {
     const body = await request.json().catch(() => ({}));
-    throw new Error(body.error?.message || `OpenAI returned HTTP ${request.status}.`);
+    if (request.status === 401) throw new ProviderError('That OpenAI API key is invalid. Check it and try again.', 'replace_key');
+    if (request.status === 429) throw new ProviderError('OpenAI is rate limited. Wait a moment and try again.', 'wait', 20);
+    if (request.status === 403) throw new ProviderError('This OpenAI key does not have permission to use the requested model.', 'permissions');
+    throw new ProviderError(body.error?.message || `OpenAI returned HTTP ${request.status}.`, 'retry');
   }
 
   const raw = responseText(await request.json());
-  const start = raw.indexOf('{');
-  const end = raw.lastIndexOf('}');
-  if (start === -1 || end === -1) throw new Error('OpenAI did not return usable SEO insights.');
-  const parsed = JSON.parse(raw.slice(start, end + 1));
+  const parsed = parseJsonText(raw, 'OpenAI');
   const competitors = Array.isArray(parsed.competitors)
     ? parsed.competitors.slice(0, 5).flatMap((item) => {
       try {
@@ -120,6 +120,7 @@ Choose 10 high-value keywords grounded in the actual page. ${autoFind
     })
     : [];
   return {
+    provider: 'openai',
     keywords: Array.isArray(parsed.keywords) ? parsed.keywords.slice(0, 12) : [],
     competitors,
     summary: String(parsed.summary || ''),
@@ -133,6 +134,19 @@ class ProviderError extends Error {
     super(message);
     this.action = action;
     this.retryAfter = retryAfter;
+  }
+}
+
+function parseJsonText(raw, provider) {
+  const start = raw.indexOf('{');
+  const end = raw.lastIndexOf('}');
+  if (start === -1 || end === -1) {
+    throw new ProviderError(`${provider} did not return usable SEO insights. Try again.`, 'retry');
+  }
+  try {
+    return JSON.parse(raw.slice(start, end + 1));
+  } catch {
+    throw new ProviderError(`${provider} returned an invalid response. Try again.`, 'retry');
   }
 }
 
@@ -195,7 +209,7 @@ async function groqRequest(apiKey, prompt, useSearch, attempt = 0) {
 
 async function getGroqInsights(page, baselineKeywords, manualCompetitors, autoFind, apiKey) {
   if (!apiKey || typeof apiKey !== 'string' || apiKey.length < 20) {
-    throw new Error('Enter a valid Groq API key.');
+    throw new ProviderError('Enter a valid Groq API key.', 'replace_key');
   }
 
   // One conservative request: ~20K characters is usually under 6K input
@@ -254,6 +268,91 @@ Choose up to 12 useful keywords grounded in the page. ${autoFind
   };
 }
 
+async function getClaudeInsights(page, baselineKeywords, manualCompetitors, autoFind, apiKey) {
+  if (!apiKey || typeof apiKey !== 'string' || apiKey.length < 20) {
+    throw new ProviderError('Enter a valid Claude API key.', 'replace_key');
+  }
+
+  const prompt = `Analyze this webpage and return ONLY valid JSON.
+Target URL: ${page.url}
+Title: ${page.title}
+Meta description: ${page.metaDescription}
+H1: ${page.fields.h1}
+H2s: ${page.fields.h2}
+Page text: ${page.fields.body.slice(0, 20_000)}
+Algorithmic keyword candidates: ${baselineKeywords.slice(0, 35).map((item) => item.term).join(', ')}
+Manual competitor URLs: ${manualCompetitors.join(', ') || 'none'}
+
+Return:
+{
+  "keywords": [{"term":"string","intent":"informational|commercial|transactional|navigational","reason":"one concise sentence"}],
+  "competitors": [{"name":"string","url":"https://...","reason":"one concise sentence"}],
+  "summary":"two concise sentences"
+}
+Choose up to 12 useful keywords grounded in the page. ${autoFind
+    ? 'Use web search to identify up to 5 real organic competitors. Exclude directories, social networks, and the target domain.'
+    : 'Do not discover new competitors; only include manually supplied competitor URLs.'}`;
+
+  let response;
+  try {
+    response = await fetch('https://api.anthropic.com/v1/messages', {
+      method: 'POST',
+      signal: AbortSignal.timeout(35_000),
+      headers: {
+        'x-api-key': apiKey,
+        'anthropic-version': '2023-06-01',
+        'content-type': 'application/json',
+      },
+      body: JSON.stringify({
+        model: 'claude-sonnet-5',
+        max_tokens: 1200,
+        messages: [{ role: 'user', content: prompt }],
+        tools: autoFind
+          ? [{ type: 'web_search_20250305', name: 'web_search', max_uses: 1 }]
+          : undefined,
+      }),
+    });
+  } catch (error) {
+    if (error?.name === 'TimeoutError') {
+      throw new ProviderError('Claude took too long to respond. Wait a moment and try again.', 'retry');
+    }
+    throw new ProviderError('Claude could not be reached. Check your connection and try again.', 'retry');
+  }
+
+  if (!response.ok) {
+    const body = await response.json().catch(() => ({}));
+    const detail = body.error?.message || '';
+    if (response.status === 401) throw new ProviderError('That Claude API key is invalid. Check it and try again.', 'replace_key');
+    if (response.status === 403) throw new ProviderError('This Claude key does not have permission to use Sonnet or web search.', 'permissions');
+    if (response.status === 429) throw new ProviderError('Claude is rate limited. Wait a moment and try again.', 'wait', 20);
+    if (response.status === 400 && /credit|billing/i.test(detail)) {
+      throw new ProviderError('Claude needs available API credits. Check Billing in Claude Console.', 'billing');
+    }
+    throw new ProviderError(detail || `Claude returned HTTP ${response.status}.`, 'retry');
+  }
+
+  const body = await response.json();
+  const raw = (body.content || []).filter((item) => item.type === 'text').map((item) => item.text).join('\n');
+  const parsed = parseJsonText(raw, 'Claude');
+  const competitors = Array.isArray(parsed.competitors)
+    ? parsed.competitors.slice(0, 5).flatMap((item) => {
+      try {
+        const url = normalizeUrl(item.url).toString();
+        if (new URL(url).hostname === page.hostname) return [];
+        return [{ name: String(item.name || new URL(url).hostname), url, reason: String(item.reason || '') }];
+      } catch {
+        return [];
+      }
+    })
+    : [];
+  return {
+    provider: 'claude',
+    keywords: Array.isArray(parsed.keywords) ? parsed.keywords.slice(0, 12) : [],
+    competitors,
+    summary: String(parsed.summary || '').slice(0, 600),
+  };
+}
+
 export default async function handler(req, res) {
   if (req.method !== 'POST') {
     res.setHeader('Allow', 'POST');
@@ -270,32 +369,39 @@ export default async function handler(req, res) {
     const baseline = analyze(page);
     let ai = null;
     if (req.body?.useAI) {
+      const provider = ['managed', 'openai', 'groq', 'claude'].includes(req.body?.provider)
+        ? req.body.provider
+        : 'managed';
+      const providerKey = typeof req.body?.providerKey === 'string' ? req.body.providerKey.trim() : '';
       try {
-        ai = await getAiInsights(page, baseline.keywords, manualCompetitors, req.body?.autoFind !== false);
-      } catch (error) {
-        ai = {
-          error: error.message || 'OpenAI analysis failed.',
-          needsGroqKey: true,
-          action: 'use_groq',
-        };
-      }
-      if (ai?.error && req.body?.groqKey) {
-        try {
+        if (provider === 'groq') {
           ai = await getGroqInsights(
             page,
             baseline.keywords,
             manualCompetitors,
             req.body?.autoFind !== false,
-            String(req.body.groqKey),
+            providerKey,
           );
-        } catch (error) {
-          ai = {
-            error: error.message || 'Groq analysis failed.',
-            needsGroqKey: true,
-            action: error.action || 'retry',
-            retryAfter: error.retryAfter || 0,
-          };
+        } else if (provider === 'claude') {
+          ai = await getClaudeInsights(page, baseline.keywords, manualCompetitors, req.body?.autoFind !== false, providerKey);
+        } else {
+          if (provider === 'openai' && !providerKey) throw new ProviderError('Enter an OpenAI API key.', 'replace_key');
+          ai = await getAiInsights(
+            page,
+            baseline.keywords,
+            manualCompetitors,
+            req.body?.autoFind !== false,
+            provider === 'openai' ? providerKey : process.env.OPENAI_API_KEY,
+          );
         }
+      } catch (error) {
+        ai = {
+          error: error.message || 'AI analysis failed.',
+          needsProviderKey: true,
+          action: error.action || (provider === 'managed' ? 'choose_provider' : 'retry'),
+          retryAfter: error.retryAfter || 0,
+          provider,
+        };
       }
     }
 

@@ -22,8 +22,9 @@ OPENAI_API_KEY=your_server_side_key
 The deterministic audit remains available when the key is not configured. You
 can optionally set `OPENAI_MODEL`; otherwise the API uses `gpt-5.6`.
 
-If OpenAI is unavailable, the webpage offers a bring-your-own-key Groq fallback.
-The visitor's Groq key is sent only with that audit request and is never stored.
+Visitors can choose built-in OpenAI or bring their own OpenAI, Groq, or Claude
+API key. Direct links to each provider's official key page are included. A
+visitor key is sent only with that audit request and is never stored.
 Groq processing uses one conservatively sized request designed to remain below
 a 12K-token allowance, with bounded retries when Groq returns HTTP 429.
 Fallback errors include user-facing recovery guidance for invalid keys,

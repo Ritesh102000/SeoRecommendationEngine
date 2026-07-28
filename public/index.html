@@ -26,6 +26,24 @@
       <div class="options">
         <label><input id="use-ai" type="checkbox" checked> Enhance keywords with OpenAI</label>
         <label><input id="auto-find" type="checkbox" checked> Automatically find competitors</label>
+        <details id="provider-options" class="provider-options">
+          <summary>Choose AI provider or use your own key</summary>
+          <div class="provider-fields">
+            <label for="provider">AI provider</label>
+            <select id="provider">
+              <option value="managed">Built-in OpenAI</option>
+              <option value="openai">My OpenAI key</option>
+              <option value="groq">My Groq key</option>
+              <option value="claude">My Claude key</option>
+            </select>
+            <div id="provider-key-wrap" hidden>
+              <label for="provider-key">API key</label>
+              <input id="provider-key" type="password" autocomplete="off" placeholder="Paste API key">
+              <a id="get-key-link" href="https://platform.openai.com/api-keys" target="_blank" rel="noopener">Get an OpenAI API key ↗</a>
+            </div>
+            <small>Your key is used for one request only and is never stored.</small>
+          </div>
+        </details>
         <details>
           <summary>Or add competitors manually</summary>
           <textarea id="competitors" rows="3" placeholder="One competitor URL per line"></textarea>
@@ -55,15 +73,11 @@
           <h3>Suggested competitors</h3>
           <div id="competitor-list" class="competitor-list"></div>
         </div>
-        <form id="groq-form" class="groq-fallback" hidden>
-          <h3 id="groq-title">OpenAI is unavailable</h3>
-          <p id="groq-message">Continue with your own Groq API key. It is used for this request only and is never stored.</p>
-          <div>
-            <input id="groq-key" type="password" placeholder="gsk_…" autocomplete="off" required>
-            <button type="submit">Use Groq</button>
-          </div>
-          <small>Each Groq request is conservatively capped below a 12K-token free-tier allowance.</small>
-        </form>
+        <div id="provider-recovery" class="groq-fallback" hidden>
+          <h3 id="provider-recovery-title">AI provider unavailable</h3>
+          <p id="provider-recovery-message">Choose another provider or check your API key.</p>
+          <button id="choose-provider" type="button">Choose provider</button>
+        </div>
       </section>
       <div class="section-title"><h2>What to fix first</h2><span id="issue-count"></span></div>
       <div id="findings" class="findings"></div>
