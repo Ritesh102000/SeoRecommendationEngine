@@ -5,6 +5,7 @@
   "type": "module",
   "description": "Chrome extension: one-click on-page SEO audit with TF-IDF keyword scoring and k-means clustering against competitor pages.",
   "scripts": {
+    "dev": "node --env-file-if-exists=.env.local tools/web-server.mjs",
     "icons": "node tools/make-icons.mjs",
     "test": "node tools/test.mjs",
     "lint": "node tools/check-syntax.mjs",
