@@ -3,8 +3,27 @@
 A Chrome extension that audits any page in one click, then ranks and clusters its
 keywords against competitor sites in the same category.
 
-Everything runs locally in the browser. There is no backend, no API key, no
-account, and no third-party service — the analysis is implemented from scratch in
+The repository also includes a Vercel-ready web version. Visitors can submit a
+URL, run the same audit, optionally enhance keyword extraction with OpenAI, and
+either discover competitors automatically or enter competitor URLs manually.
+
+## Deploy the web app on Vercel
+
+Import the repository into Vercel with the **Other** framework preset. The
+included `vercel.json` publishes `public/` and deploys `api/audit.js`.
+
+For AI keyword enhancement and automatic competitor discovery, add this Vercel
+environment variable and redeploy:
+
+```text
+OPENAI_API_KEY=your_server_side_key
+```
+
+The deterministic audit remains available when the key is not configured. You
+can optionally set `OPENAI_MODEL`; otherwise the API uses `gpt-5.6`.
+
+The Chrome extension still runs locally in the browser with no backend, account,
+API key, or third-party service. Its core analysis is implemented from scratch in
 plain JavaScript.
 
 ---

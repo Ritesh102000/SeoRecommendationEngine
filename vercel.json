@@ -2,7 +2,7 @@
   "outputDirectory": "public",
   "functions": {
     "api/audit.js": {
-      "maxDuration": 15
+      "maxDuration": 60
     }
   },
   "headers": [

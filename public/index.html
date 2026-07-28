@@ -23,6 +23,14 @@
         <input id="url" name="url" type="text" inputmode="url" placeholder="https://yourwebsite.com" required autocomplete="url">
         <button id="submit" type="submit">Audit my page <span>→</span></button>
       </form>
+      <div class="options">
+        <label><input id="use-ai" type="checkbox" checked> Enhance keywords with OpenAI</label>
+        <label><input id="auto-find" type="checkbox" checked> Automatically find competitors</label>
+        <details>
+          <summary>Or add competitors manually</summary>
+          <textarea id="competitors" rows="3" placeholder="One competitor URL per line"></textarea>
+        </details>
+      </div>
       <p id="error" class="error" role="alert" hidden></p>
       <div class="trust">
         <span>✓ No account needed</span><span>✓ Actionable fixes</span><span>✓ Results in seconds</span>
@@ -39,6 +47,15 @@
         </div>
       </div>
       <div id="stats" class="stats"></div>
+      <section id="keyword-insights" class="insights">
+        <div class="section-title"><h2>Keyword opportunities</h2><span id="keyword-source"></span></div>
+        <p id="ai-summary" class="ai-summary"></p>
+        <div id="keywords" class="keyword-grid"></div>
+        <div id="competitor-results" hidden>
+          <h3>Suggested competitors</h3>
+          <div id="competitor-list" class="competitor-list"></div>
+        </div>
+      </section>
       <div class="section-title"><h2>What to fix first</h2><span id="issue-count"></span></div>
       <div id="findings" class="findings"></div>
       <details class="passed"><summary id="passed-summary">Passed checks</summary><div id="passed-list"></div></details>
