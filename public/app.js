@@ -3,6 +3,8 @@ const input = document.querySelector('#url');
 const button = document.querySelector('#submit');
 const errorBox = document.querySelector('#error');
 const results = document.querySelector('#results');
+const groqForm = document.querySelector('#groq-form');
+let lastRequest = null;
 
 const escapeHtml = (value) => String(value ?? '').replace(/[&<>"']/g, (char) => ({
   '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;',
@@ -10,23 +12,35 @@ const escapeHtml = (value) => String(value ?? '').replace(/[&<>"']/g, (char) => 
 
 form.addEventListener('submit', async (event) => {
   event.preventDefault();
+  const competitors = document.querySelector('#competitors').value
+    .split(/\n|,/).map((item) => item.trim()).filter(Boolean);
+  lastRequest = {
+    url: input.value,
+    useAI: document.querySelector('#use-ai').checked,
+    autoFind: document.querySelector('#auto-find').checked,
+    competitors,
+  };
+  await runAudit(lastRequest);
+});
+
+groqForm.addEventListener('submit', async (event) => {
+  event.preventDefault();
+  const groqKey = document.querySelector('#groq-key').value.trim();
+  if (!lastRequest || !groqKey) return;
+  await runAudit({ ...lastRequest, groqKey });
+  document.querySelector('#groq-key').value = '';
+});
+
+async function runAudit(payload) {
   errorBox.hidden = true;
-  results.hidden = true;
   button.disabled = true;
   button.innerHTML = 'Scanning…';
 
   try {
-    const competitors = document.querySelector('#competitors').value
-      .split(/\n|,/).map((item) => item.trim()).filter(Boolean);
     const response = await fetch('/api/audit', {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({
-        url: input.value,
-        useAI: document.querySelector('#use-ai').checked,
-        autoFind: document.querySelector('#auto-find').checked,
-        competitors,
-      }),
+      body: JSON.stringify(payload),
     });
     const data = await response.json();
     if (!response.ok) throw new Error(data.error || 'The audit failed.');
@@ -38,7 +52,7 @@ form.addEventListener('submit', async (event) => {
     button.disabled = false;
     button.innerHTML = 'Audit my page <span>→</span>';
   }
-});
+}
 
 function render(data) {
   const score = document.querySelector('#score');
@@ -81,10 +95,13 @@ function render(data) {
 function renderInsights(data) {
   const ai = data.ai && !data.ai.error ? data.ai : null;
   const keywords = ai?.keywords?.length ? ai.keywords : data.keywords;
-  document.querySelector('#keyword-source').textContent = ai ? 'AI enhanced' : 'Page analysis';
+  document.querySelector('#keyword-source').textContent = ai
+    ? `${ai.provider === 'groq' ? 'Groq' : 'OpenAI'} enhanced`
+    : 'Page analysis';
   const summary = document.querySelector('#ai-summary');
   summary.textContent = ai?.summary || data.ai?.error || '';
   summary.hidden = !summary.textContent;
+  groqForm.hidden = !data.ai?.needsGroqKey;
   document.querySelector('#keywords').innerHTML = keywords.map((item) => `
     <article class="keyword">
       <strong>${escapeHtml(item.term)}</strong>

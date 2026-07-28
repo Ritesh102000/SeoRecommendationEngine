@@ -57,7 +57,7 @@ function responseText(response) {
 
 async function getAiInsights(page, baselineKeywords, manualCompetitors, autoFind) {
   if (!process.env.OPENAI_API_KEY) {
-    return { error: 'AI features need OPENAI_API_KEY in Vercel.' };
+    throw new Error('OpenAI is not configured for this deployment.');
   }
 
   const prompt = `You are an SEO research assistant. Analyze the supplied webpage and return ONLY valid JSON.
@@ -126,6 +126,102 @@ Choose 10 high-value keywords grounded in the actual page. ${autoFind
   };
 }
 
+const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+
+async function groqRequest(apiKey, prompt, useSearch, attempt = 0) {
+  const response = await fetch('https://api.groq.com/openai/v1/chat/completions', {
+    method: 'POST',
+    signal: AbortSignal.timeout(25_000),
+    headers: {
+      authorization: `Bearer ${apiKey}`,
+      'content-type': 'application/json',
+    },
+    body: JSON.stringify({
+      model: useSearch ? 'groq/compound-mini' : 'llama-3.3-70b-versatile',
+      messages: [
+        { role: 'system', content: 'You are an SEO research assistant. Return only valid JSON.' },
+        { role: 'user', content: prompt },
+      ],
+      response_format: { type: 'json_object' },
+      max_tokens: 1200,
+    }),
+  });
+
+  if (response.status === 429 && attempt < 2) {
+    const retrySeconds = Math.min(15, Math.max(1, Number(response.headers.get('retry-after') || 3)));
+    await sleep(retrySeconds * 1000);
+    return groqRequest(apiKey, prompt, useSearch, attempt + 1);
+  }
+  if (!response.ok) {
+    const body = await response.json().catch(() => ({}));
+    throw new Error(body.error?.message || `Groq returned HTTP ${response.status}.`);
+  }
+
+  const body = await response.json();
+  return JSON.parse(body.choices?.[0]?.message?.content || '{}');
+}
+
+async function getGroqInsights(page, baselineKeywords, manualCompetitors, autoFind, apiKey) {
+  if (!apiKey || typeof apiKey !== 'string' || apiKey.length < 20) {
+    throw new Error('Enter a valid Groq API key.');
+  }
+
+  // One conservative request: ~20K characters is usually under 6K input
+  // tokens, leaving ample room for the prompt and the 1,200-token output
+  // beneath a 12K-token free-tier allowance.
+  const body = page.fields.body.slice(0, 20_000);
+  const prompt = `Analyze this webpage.
+Target URL: ${page.url}
+Title: ${page.title}
+Meta description: ${page.metaDescription}
+H1: ${page.fields.h1}
+H2s: ${page.fields.h2}
+Page text: ${body}
+Algorithmic keyword candidates: ${baselineKeywords.slice(0, 35).map((item) => item.term).join(', ')}
+Manual competitor URLs: ${manualCompetitors.join(', ') || 'none'}
+
+Return:
+{
+  "keywords": [{"term":"string","intent":"informational|commercial|transactional|navigational","reason":"one concise sentence"}],
+  "competitors": [{"name":"string","url":"https://...","reason":"one concise sentence"}],
+  "summary":"one concise sentence"
+}
+Choose up to 12 useful keywords grounded in the page. ${autoFind
+    ? 'Use web search once to identify up to 5 real organic competitors. Exclude directories, social networks, and the target domain.'
+    : 'Do not discover new competitors; only include manually supplied competitor URLs.'}`;
+  const output = await groqRequest(apiKey, prompt, Boolean(autoFind));
+
+  const keywordMap = new Map();
+  const competitorMap = new Map();
+  for (const item of Array.isArray(output.keywords) ? output.keywords : []) {
+    const term = String(item.term || '').trim().toLowerCase();
+    if (term && !keywordMap.has(term)) keywordMap.set(term, { ...item, term });
+  }
+  for (const item of Array.isArray(output.competitors) ? output.competitors : []) {
+    try {
+      const url = normalizeUrl(item.url).toString();
+      const hostname = new URL(url).hostname;
+      if (hostname !== page.hostname && !competitorMap.has(hostname)) {
+        competitorMap.set(hostname, {
+          name: String(item.name || hostname),
+          url,
+          reason: String(item.reason || ''),
+        });
+        }
+    } catch {
+      // Ignore unsafe or malformed model-generated URLs.
+    }
+  }
+
+  return {
+    provider: 'groq',
+    keywords: Array.from(keywordMap.values()).slice(0, 12),
+    competitors: Array.from(competitorMap.values()).slice(0, 5),
+    summary: String(output.summary || '').slice(0, 600),
+    batches: 1,
+  };
+}
+
 export default async function handler(req, res) {
   if (req.method !== 'POST') {
     res.setHeader('Allow', 'POST');
@@ -145,7 +241,20 @@ export default async function handler(req, res) {
       try {
         ai = await getAiInsights(page, baseline.keywords, manualCompetitors, req.body?.autoFind !== false);
       } catch (error) {
-        ai = { error: error.message || 'AI analysis failed.' };
+        ai = { error: error.message || 'OpenAI analysis failed.', needsGroqKey: true };
+      }
+      if (ai?.error && req.body?.groqKey) {
+        try {
+          ai = await getGroqInsights(
+            page,
+            baseline.keywords,
+            manualCompetitors,
+            req.body?.autoFind !== false,
+            String(req.body.groqKey),
+          );
+        } catch (error) {
+          ai = { error: error.message || 'Groq analysis failed.', needsGroqKey: true };
+        }
       }
     }
 

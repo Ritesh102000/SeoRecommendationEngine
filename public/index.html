@@ -55,6 +55,15 @@
           <h3>Suggested competitors</h3>
           <div id="competitor-list" class="competitor-list"></div>
         </div>
+        <form id="groq-form" class="groq-fallback" hidden>
+          <h3>OpenAI is unavailable</h3>
+          <p>Continue with your own Groq API key. It is used for this request only and is never stored.</p>
+          <div>
+            <input id="groq-key" type="password" placeholder="gsk_…" autocomplete="off" required>
+            <button type="submit">Use Groq</button>
+          </div>
+          <small>Each Groq request is conservatively capped below a 12K-token free-tier allowance.</small>
+        </form>
       </section>
       <div class="section-title"><h2>What to fix first</h2><span id="issue-count"></span></div>
       <div id="findings" class="findings"></div>

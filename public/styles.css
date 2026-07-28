@@ -72,6 +72,10 @@ button:disabled { opacity: .65; cursor: wait; }
 .competitor-list { display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px; }
 .competitor-list a { padding: 14px; border: 1px solid var(--line); border-radius: 12px; color: var(--ink); text-decoration: none; background: white; }
 .competitor-list strong, .competitor-list span { display: block; }.competitor-list span { color: var(--muted); font-size: 12px; }
+.groq-fallback { margin-top: 22px; padding: 20px; border: 1px solid #dfd6f7; border-radius: 14px; background: #f7f3ff; }
+.groq-fallback h3, .groq-fallback p { margin-top: 0; }.groq-fallback p, .groq-fallback small { color: var(--muted); }
+.groq-fallback div { display: flex; gap: 8px; margin-bottom: 8px; }
+.groq-fallback input { min-width: 0; flex: 1; padding: 12px; border: 1px solid #d7cbed; border-radius: 10px; font: inherit; }
 .section-title { display: flex; align-items: center; justify-content: space-between; }
 .section-title h2 { font-size: 28px; }.section-title span { color: var(--muted); }
 .finding { display: grid; grid-template-columns: 78px 1fr; gap: 18px; padding: 24px 0; border-top: 1px solid var(--line); }

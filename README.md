@@ -22,6 +22,11 @@ OPENAI_API_KEY=your_server_side_key
 The deterministic audit remains available when the key is not configured. You
 can optionally set `OPENAI_MODEL`; otherwise the API uses `gpt-5.6`.
 
+If OpenAI is unavailable, the webpage offers a bring-your-own-key Groq fallback.
+The visitor's Groq key is sent only with that audit request and is never stored.
+Groq processing uses one conservatively sized request designed to remain below
+a 12K-token allowance, with bounded retries when Groq returns HTTP 429.
+
 The Chrome extension still runs locally in the browser with no backend, account,
 API key, or third-party service. Its core analysis is implemented from scratch in
 plain JavaScript.
