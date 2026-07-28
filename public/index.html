@@ -56,8 +56,8 @@
           <div id="competitor-list" class="competitor-list"></div>
         </div>
         <form id="groq-form" class="groq-fallback" hidden>
-          <h3>OpenAI is unavailable</h3>
-          <p>Continue with your own Groq API key. It is used for this request only and is never stored.</p>
+          <h3 id="groq-title">OpenAI is unavailable</h3>
+          <p id="groq-message">Continue with your own Groq API key. It is used for this request only and is never stored.</p>
           <div>
             <input id="groq-key" type="password" placeholder="gsk_…" autocomplete="off" required>
             <button type="submit">Use Groq</button>

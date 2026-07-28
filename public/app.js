@@ -102,6 +102,7 @@ function renderInsights(data) {
   summary.textContent = ai?.summary || data.ai?.error || '';
   summary.hidden = !summary.textContent;
   groqForm.hidden = !data.ai?.needsGroqKey;
+  if (data.ai?.needsGroqKey) renderGroqAction(data.ai);
   document.querySelector('#keywords').innerHTML = keywords.map((item) => `
     <article class="keyword">
       <strong>${escapeHtml(item.term)}</strong>
@@ -117,4 +118,22 @@ function renderInsights(data) {
       <strong>${escapeHtml(item.name || item.url)}</strong>
       <span>${escapeHtml(item.reason || '')}</span>
     </a>`).join('');
+}
+
+function renderGroqAction(ai) {
+  const title = document.querySelector('#groq-title');
+  const message = document.querySelector('#groq-message');
+  const submit = groqForm.querySelector('button');
+  const actions = {
+    use_groq: ['OpenAI is unavailable', 'Continue with your own Groq API key. It is used only for this request and is never stored.', 'Use Groq'],
+    replace_key: ['Check your Groq key', 'The key was rejected. Copy a valid key from Groq Console and enter it again.', 'Try another key'],
+    permissions: ['Groq permission required', 'Check that this key’s Groq project can use Compound Mini and Llama 3.3, then retry.', 'Try again'],
+    billing: ['Check Groq limits', 'Open Groq Billing and Limits, restore API access, then retry.', 'Try again'],
+    wait: ['Groq is rate limited', `Wait ${ai.retryAfter || 10} seconds before trying again.`, 'Retry after waiting'],
+    retry: ['Temporary Groq failure', 'Wait a moment, check your connection, and try again.', 'Try again'],
+  };
+  const [heading, instruction, label] = actions[ai.action] || actions.retry;
+  title.textContent = heading;
+  message.textContent = instruction;
+  submit.textContent = label;
 }

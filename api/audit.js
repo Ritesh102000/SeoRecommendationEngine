@@ -128,24 +128,40 @@ Choose 10 high-value keywords grounded in the actual page. ${autoFind
 
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
+class ProviderError extends Error {
+  constructor(message, action, retryAfter = 0) {
+    super(message);
+    this.action = action;
+    this.retryAfter = retryAfter;
+  }
+}
+
 async function groqRequest(apiKey, prompt, useSearch, attempt = 0) {
-  const response = await fetch('https://api.groq.com/openai/v1/chat/completions', {
-    method: 'POST',
-    signal: AbortSignal.timeout(25_000),
-    headers: {
-      authorization: `Bearer ${apiKey}`,
-      'content-type': 'application/json',
-    },
-    body: JSON.stringify({
-      model: useSearch ? 'groq/compound-mini' : 'llama-3.3-70b-versatile',
-      messages: [
-        { role: 'system', content: 'You are an SEO research assistant. Return only valid JSON.' },
-        { role: 'user', content: prompt },
-      ],
-      response_format: { type: 'json_object' },
-      max_tokens: 1200,
-    }),
-  });
+  let response;
+  try {
+    response = await fetch('https://api.groq.com/openai/v1/chat/completions', {
+      method: 'POST',
+      signal: AbortSignal.timeout(25_000),
+      headers: {
+        authorization: `Bearer ${apiKey}`,
+        'content-type': 'application/json',
+      },
+      body: JSON.stringify({
+        model: useSearch ? 'groq/compound-mini' : 'llama-3.3-70b-versatile',
+        messages: [
+          { role: 'system', content: 'You are an SEO research assistant. Return only valid JSON.' },
+          { role: 'user', content: prompt },
+        ],
+        response_format: { type: 'json_object' },
+        max_tokens: 1200,
+      }),
+    });
+  } catch (error) {
+    if (error?.name === 'TimeoutError') {
+      throw new ProviderError('Groq took too long to respond. Wait a moment and try again.', 'retry');
+    }
+    throw new ProviderError('Groq could not be reached. Check your connection and try again.', 'retry');
+  }
 
   if (response.status === 429 && attempt < 2) {
     const retrySeconds = Math.min(15, Math.max(1, Number(response.headers.get('retry-after') || 3)));
@@ -154,7 +170,23 @@ async function groqRequest(apiKey, prompt, useSearch, attempt = 0) {
   }
   if (!response.ok) {
     const body = await response.json().catch(() => ({}));
-    throw new Error(body.error?.message || `Groq returned HTTP ${response.status}.`);
+    const retrySeconds = Math.min(60, Math.max(1, Number(response.headers.get('retry-after') || 10)));
+    if (response.status === 401) {
+      throw new ProviderError('That Groq API key is invalid. Check it and enter it again.', 'replace_key');
+    }
+    if (response.status === 403) {
+      throw new ProviderError('This Groq key cannot use the selected model. Check the key’s project permissions.', 'permissions');
+    }
+    if (response.status === 429) {
+      throw new ProviderError(`Groq’s free limit is busy. Wait ${retrySeconds} seconds, then try again.`, 'wait', retrySeconds);
+    }
+    if (response.status === 400 && body.error?.code === 'blocked_api_access') {
+      throw new ProviderError('Groq blocked API access because of an account or spending limit. Check Groq Billing and Limits.', 'billing');
+    }
+    if (response.status >= 500) {
+      throw new ProviderError('Groq is temporarily unavailable. Wait a minute and try again.', 'wait', 60);
+    }
+    throw new ProviderError('Groq rejected this request. Check the key and try again.', 'replace_key');
   }
 
   const body = await response.json();
@@ -241,7 +273,11 @@ export default async function handler(req, res) {
       try {
         ai = await getAiInsights(page, baseline.keywords, manualCompetitors, req.body?.autoFind !== false);
       } catch (error) {
-        ai = { error: error.message || 'OpenAI analysis failed.', needsGroqKey: true };
+        ai = {
+          error: error.message || 'OpenAI analysis failed.',
+          needsGroqKey: true,
+          action: 'use_groq',
+        };
       }
       if (ai?.error && req.body?.groqKey) {
         try {
@@ -253,7 +289,12 @@ export default async function handler(req, res) {
             String(req.body.groqKey),
           );
         } catch (error) {
-          ai = { error: error.message || 'Groq analysis failed.', needsGroqKey: true };
+          ai = {
+            error: error.message || 'Groq analysis failed.',
+            needsGroqKey: true,
+            action: error.action || 'retry',
+            retryAfter: error.retryAfter || 0,
+          };
         }
       }
     }
